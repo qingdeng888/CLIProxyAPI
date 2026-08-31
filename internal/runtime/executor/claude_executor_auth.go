@@ -7,6 +7,7 @@ import (
 	"time"
 
 	claudeauth "github.com/router-for-me/CLIProxyAPI/v7/internal/auth/claude"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/proxypool"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/runtime/executor/helps"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 	log "github.com/sirupsen/logrus"
@@ -142,7 +143,7 @@ func (e *ClaudeExecutor) fetchClaudeOAuthProfile(ctx context.Context, auth *clip
 	}
 	profileCtx, cancelProfile := context.WithTimeout(ctx, claudeAccountProfileTimeout)
 	defer cancelProfile()
-	service := claudeauth.NewClaudeAuthWithProxyURL(e.cfg, auth.ProxyURL)
+	service := claudeauth.NewClaudeAuthWithProxyURL(e.cfg, proxypool.Resolve(auth.ProxyURL))
 	return service.FetchOAuthProfile(profileCtx, apiKey)
 }
 
@@ -161,7 +162,7 @@ func (e *ClaudeExecutor) Refresh(ctx context.Context, auth *cliproxyauth.Auth) (
 	if refreshToken == "" {
 		return auth, nil
 	}
-	svc := claudeauth.NewClaudeAuthWithProxyURL(e.cfg, auth.ProxyURL)
+	svc := claudeauth.NewClaudeAuthWithProxyURL(e.cfg, proxypool.Resolve(auth.ProxyURL))
 	td, err := svc.RefreshTokensWithRetry(ctx, refreshToken, 3)
 	if err != nil {
 		return nil, err

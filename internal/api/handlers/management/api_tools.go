@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/proxypool"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/proxyutil"
 	log "github.com/sirupsen/logrus"
@@ -120,7 +121,9 @@ func (h *Handler) APICall(c *gin.Context) {
 		return
 	}
 
-	requestProxyURL := strings.TrimSpace(body.ProxyURL)
+	// Resolve "pool:<name>" references before validation so pool references
+	// are accepted and checked as concrete proxy URLs.
+	requestProxyURL := proxypool.Resolve(body.ProxyURL)
 	if requestProxyURL != "" {
 		if _, errParseProxy := proxyutil.Parse(requestProxyURL); errParseProxy != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid proxy_url"})

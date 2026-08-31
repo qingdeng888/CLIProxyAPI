@@ -17,6 +17,7 @@ import (
 
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/cache"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/proxypool"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/runtime/executor/helps"
 	internalsignature "github.com/router-for-me/CLIProxyAPI/v7/internal/signature"
 	antigravityclaude "github.com/router-for-me/CLIProxyAPI/v7/internal/translator/antigravity/claude"
@@ -326,13 +327,15 @@ func newAntigravityHTTPClient(ctx context.Context, cfg *config.Config, auth *cli
 }
 
 func antigravityProxyURL(cfg *config.Config, auth *cliproxyauth.Auth) string {
+	// Resolve "pool:<name>" references first; keep priority semantics:
+	// auth proxy wins, config proxy is the fallback.
 	if auth != nil {
-		if proxyURL := strings.TrimSpace(auth.ProxyURL); proxyURL != "" {
+		if proxyURL := proxypool.Resolve(auth.ProxyURL); proxyURL != "" {
 			return proxyURL
 		}
 	}
 	if cfg != nil {
-		return strings.TrimSpace(cfg.ProxyURL)
+		return proxypool.Resolve(cfg.ProxyURL)
 	}
 	return ""
 }

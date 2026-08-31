@@ -317,6 +317,13 @@ func isKnownDefaultValue(path []string, node *yaml.Node) bool {
 		return false
 	}
 
+	// proxy-pool[].enabled is pointer-backed too: an explicit false disables a
+	// proxy, while the key's absence means enabled. Dropping "enabled: false"
+	// as a zero value would silently re-enable the proxy on every save.
+	if len(path) > 1 && path[len(path)-1] == "enabled" && path[len(path)-2] == "proxy-pool" && node != nil && node.Kind == yaml.ScalarNode && node.Tag == "!!bool" {
+		return false
+	}
+
 	// First check if it's a zero value
 	if isZeroValueNode(node) {
 		return true

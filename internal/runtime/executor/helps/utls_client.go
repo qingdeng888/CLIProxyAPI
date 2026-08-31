@@ -15,6 +15,7 @@ import (
 	internalcache "github.com/router-for-me/CLIProxyAPI/v7/internal/cache"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/httpwire"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/proxypool"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/proxyutil"
 	log "github.com/sirupsen/logrus"
@@ -367,12 +368,14 @@ func (f *fallbackRoundTripper) RoundTrip(req *http.Request) (*http.Response, err
 // for Anthropic and a Chrome profile for ChatGPT, with a standard-transport
 // fallback for other hosts.
 func NewUtlsHTTPClient(ctx context.Context, cfg *config.Config, auth *cliproxyauth.Auth, timeout time.Duration) *http.Client {
+	// Resolve "pool:<name>" references first so a pool yields a concrete
+	// proxy URL per client.
 	var proxyURL string
 	if auth != nil {
-		proxyURL = strings.TrimSpace(auth.ProxyURL)
+		proxyURL = proxypool.Resolve(auth.ProxyURL)
 	}
 	if proxyURL == "" && cfg != nil {
-		proxyURL = strings.TrimSpace(cfg.ProxyURL)
+		proxyURL = proxypool.Resolve(cfg.ProxyURL)
 	}
 
 	var ctxRoundTripper http.RoundTripper

@@ -12,6 +12,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/proxypool"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/runtime/executor/helps"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/executor"
@@ -168,12 +169,14 @@ func newProxyAwareWebsocketDialer(cfg *config.Config, auth *cliproxyauth.Auth) *
 		}).DialContext,
 	}
 
+	// Resolve "pool:<name>" references first so a pool yields a concrete
+	// proxy URL per dialer.
 	proxyURL := ""
 	if auth != nil {
-		proxyURL = strings.TrimSpace(auth.ProxyURL)
+		proxyURL = proxypool.Resolve(auth.ProxyURL)
 	}
 	if proxyURL == "" && cfg != nil {
-		proxyURL = strings.TrimSpace(cfg.ProxyURL)
+		proxyURL = proxypool.Resolve(cfg.ProxyURL)
 	}
 	if proxyURL == "" {
 		return dialer

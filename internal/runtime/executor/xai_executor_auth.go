@@ -7,6 +7,7 @@ import (
 	"time"
 
 	xaiauth "github.com/router-for-me/CLIProxyAPI/v7/internal/auth/xai"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/proxypool"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/runtime/executor/helps"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 	log "github.com/sirupsen/logrus"
@@ -26,7 +27,7 @@ func (e *XAIExecutor) Refresh(ctx context.Context, auth *cliproxyauth.Auth) (*cl
 		return auth, nil
 	}
 	tokenEndpoint := xaiMetadataString(auth.Metadata, "token_endpoint")
-	svc := xaiauth.NewXAIAuthWithProxyURL(e.cfg, auth.ProxyURL)
+	svc := xaiauth.NewXAIAuthWithProxyURL(e.cfg, proxypool.Resolve(auth.ProxyURL))
 	td, err := svc.RefreshTokens(ctx, refreshToken, tokenEndpoint)
 	if err != nil {
 		return nil, err

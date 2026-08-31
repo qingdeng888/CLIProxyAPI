@@ -3,10 +3,10 @@ package helps
 import (
 	"context"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/proxypool"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/proxyutil"
 	log "github.com/sirupsen/logrus"
@@ -31,15 +31,16 @@ func NewProxyAwareHTTPClient(ctx context.Context, cfg *config.Config, auth *clip
 		httpClient.Timeout = timeout
 	}
 
-	// Priority 1: Use auth.ProxyURL if configured
+	// Priority 1: Use auth.ProxyURL if configured. Resolve "pool:<name>"
+	// references first so a pool yields a concrete proxy URL per client.
 	var proxyURL string
 	if auth != nil {
-		proxyURL = strings.TrimSpace(auth.ProxyURL)
+		proxyURL = proxypool.Resolve(auth.ProxyURL)
 	}
 
-	// Priority 2: Use cfg.ProxyURL if auth proxy is not configured
+	// Priority 2: Use cfg.ProxyURL if auth proxy is not configured.
 	if proxyURL == "" && cfg != nil {
-		proxyURL = strings.TrimSpace(cfg.ProxyURL)
+		proxyURL = proxypool.Resolve(cfg.ProxyURL)
 	}
 
 	// If we have a proxy URL configured, set up the transport

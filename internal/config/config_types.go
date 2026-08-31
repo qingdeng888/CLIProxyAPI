@@ -747,3 +747,35 @@ func (m OpenAICompatibilityModel) GetForceMapping() bool    { return m.ForceMapp
 func (m OpenAICompatibilityModel) GetIsCompat() bool        { return m.IsCompat }
 
 func (m OpenAICompatibilityModel) GetThinking() *registry.ThinkingSupport { return m.Thinking }
+
+// ProxyEntry defines a single proxy entity in the flat proxy pool. Entries are
+// managed through the management API and referenced from any "proxy-url"
+// setting with the "pool" (rotate) or "bind:<id>" selector syntax. The ID is
+// derived deterministically from the normalized URL at sanitize time and is
+// not persisted in YAML.
+type ProxyEntry struct {
+	// ID is the stable entity identifier (first 12 hex chars of sha256 of the
+	// normalized URL). Derived during sanitization; yaml:"-".
+	ID string `yaml:"-" json:"id"`
+	// Name is an optional display name; auto-named as "proxy-<n>" when empty.
+	Name string `yaml:"name,omitempty" json:"name,omitempty"`
+	// URL is the proxy URL (http/https/socks5/socks5h), optionally with credentials.
+	URL string `yaml:"url" json:"url"`
+	// Enabled controls whether this proxy participates in pool selection.
+	// A nil value defaults to enabled.
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	// Remark is an optional note for this proxy entry.
+	Remark string `yaml:"remark,omitempty" json:"remark,omitempty"`
+	// LastCheckAt is the RFC3339 timestamp of the last connectivity check (runtime only).
+	LastCheckAt string `yaml:"-" json:"last_check_at,omitempty"`
+	// LastCheckOK reports whether the last connectivity check succeeded (runtime only).
+	LastCheckOK bool `yaml:"-" json:"last_check_ok,omitempty"`
+	// LastCheckMsg holds the error message of the last failed check (runtime only).
+	LastCheckMsg string `yaml:"-" json:"last_check_msg,omitempty"`
+}
+
+// IsEnabled reports whether this proxy participates in pool selection.
+// A nil Enabled value defaults to true.
+func (p ProxyEntry) IsEnabled() bool {
+	return p.Enabled == nil || *p.Enabled
+}

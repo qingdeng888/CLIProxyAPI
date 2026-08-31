@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/misc"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/proxypool"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/proxyutil"
 	log "github.com/sirupsen/logrus"
@@ -75,13 +76,15 @@ func (s *Service) fetchAntigravityModelCapabilityHintsForAuth(ctx context.Contex
 }
 
 func (s *Service) antigravityModelFetchProxyURL(auth *coreauth.Auth) string {
+	// Resolve "pool:<name>" references first; keep priority semantics:
+	// auth proxy wins, config proxy is the fallback.
 	if auth != nil {
-		if proxyURL := strings.TrimSpace(auth.ProxyURL); proxyURL != "" {
+		if proxyURL := proxypool.Resolve(auth.ProxyURL); proxyURL != "" {
 			return proxyURL
 		}
 	}
 	if s != nil && s.cfg != nil {
-		return strings.TrimSpace(s.cfg.ProxyURL)
+		return proxypool.Resolve(s.cfg.ProxyURL)
 	}
 	return ""
 }

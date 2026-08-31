@@ -171,4 +171,9 @@ type Config struct {
 
 	// Payload defines default and override rules for provider payload parameters.
 	Payload PayloadConfig `yaml:"payload" json:"payload"`
+
+	// ProxyPool defines the flat pool of proxy entities. Any "proxy-url"
+	// setting may select from it with "pool" (round-robin rotate) or bind to a
+	// specific proxy with "bind:<id>" / "bind:<url>".
+	ProxyPool []ProxyEntry `yaml:"proxy-pool" json:"proxy-pool,omitempty"`
 }

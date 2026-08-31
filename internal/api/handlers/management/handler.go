@@ -403,6 +403,26 @@ func (h *Handler) persist(c *gin.Context) bool {
 	return h.persistLocked(c)
 }
 
+// persistQuiet saves the current in-memory config to disk without writing any
+// HTTP response, so handlers that return their own JSON payload can call it
+// after emitting their result. On failure it writes a 500 error response and
+// returns false; the caller must check the return value before responding.
+func (h *Handler) persistQuiet(c *gin.Context) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if err := config.SaveConfigPreserveComments(h.configFilePath, h.cfg); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to save config: %v", err)})
+		return false
+	}
+	snapshot := h.reloadSnapshotConfigLocked()
+	var reqCtx context.Context
+	if c != nil && c.Request != nil {
+		reqCtx = c.Request.Context()
+	}
+	h.reloadConfigAfterManagementSaveAsync(reqCtx, snapshot)
+	return true
+}
+
 // persistLocked saves the current in-memory config to disk.
 // It expects the caller to hold h.mu.
 func (h *Handler) persistLocked(c *gin.Context) bool {

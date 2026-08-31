@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/proxypool"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/watcher/synthesizer"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/config"
@@ -108,6 +109,9 @@ func (s *Service) commitConfigUpdate(newCfg *config.Config) configCommit {
 	s.cfg = newCfg
 	s.cfgMu.Unlock()
 	s.configSequence++
+	// Publish proxy pools so "pool:<name>" proxy-url references stay in sync
+	// with the committed configuration.
+	proxypool.Sync(newCfg)
 	return configCommit{cfg: newCfg, sequence: s.configSequence}
 }
 

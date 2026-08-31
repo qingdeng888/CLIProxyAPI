@@ -2,9 +2,9 @@ package cliproxy
 
 import (
 	"net/http"
-	"strings"
 	"sync"
 
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/proxypool"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 	"github.com/router-for-me/CLIProxyAPI/v7/sdk/proxyutil"
 	log "github.com/sirupsen/logrus"
@@ -26,7 +26,9 @@ func (p *defaultRoundTripperProvider) RoundTripperFor(auth *coreauth.Auth) http.
 	if auth == nil {
 		return nil
 	}
-	proxyStr := strings.TrimSpace(auth.ProxyURL)
+	// Resolve "pool:<name>" references before caching/transport building so a
+	// pool reference yields a concrete proxy URL per lookup.
+	proxyStr := proxypool.Resolve(auth.ProxyURL)
 	if proxyStr == "" {
 		return nil
 	}

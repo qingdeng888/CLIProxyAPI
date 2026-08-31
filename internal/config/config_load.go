@@ -12,6 +12,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// OnConfigLoaded is an optional post-load hook invoked with every successfully
+// loaded configuration. Packages that need to observe loaded configs without
+// creating an import cycle (for example the proxy pool registry) register
+// themselves here from their own init function.
+var OnConfigLoaded func(*Config)
+
 // LoadConfig reads a YAML configuration file from the given path,
 // unmarshals it into a Config struct, applies environment variable overrides,
 // and returns it.
@@ -185,6 +191,16 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 
 	// Validate raw payload rules and drop invalid entries.
 	cfg.SanitizePayloadRules()
+
+	// Sanitize the flat proxy pool and validate its proxy URLs.
+	cfg.SanitizeProxyPool()
+
+	// Notify post-load observers (for example the proxy pool registry).
+	// This hook avoids an import cycle: this package must not import the
+	// observer packages that consume *Config.
+	if OnConfigLoaded != nil {
+		OnConfigLoaded(&cfg)
+	}
 
 	// Return the populated configuration struct.
 	return &cfg, nil
