@@ -96,16 +96,22 @@ remote-management:
 
 ### 第 2 步：启动
 
-```bash
-docker compose -f docker-compose.full.yml up -d --build
-```
+**两种启动方式，选一种即可：**
 
-- 第一次运行会**自动构建镜像**（下载编译环境 + 编译，需要几分钟，耐心等）
-- 之后再启动（代码没变）可以省略 `--build`：
+**方式 A：预构建镜像（默认，推荐）** — 用 GitHub Actions 已经构建好的镜像，**不需要本地编译，秒级启动**：
 
 ```bash
 docker compose -f docker-compose.full.yml up -d
 ```
+
+**方式 B：本地构建镜像**（改了自己代码 / 没发布镜像时）：
+
+```bash
+docker compose -f docker-compose.full.local.yml up -d --build
+```
+
+> 方式 B 第一次运行会**自动构建镜像**（下载编译环境 + 编译，需要几分钟，耐心等）。
+> 之后代码没变可以省略 `--build`：`docker compose -f docker-compose.full.local.yml up -d`
 
 ### 第 3 步：访问
 
@@ -120,6 +126,8 @@ http://你的服务器IP:40010/
 ---
 
 ## 四、常用运维命令
+
+> 以下命令的 `-f docker-compose.full.yml` 换成 `-f docker-compose.full.local.yml` 同样适用（本地构建版）。
 
 ```bash
 # 查看运行状态（两个容器都应该是 Up 状态）
@@ -150,8 +158,8 @@ docker compose -f docker-compose.full.yml down
 | --- | --- | --- |
 | `WEB_PORT` | `40010` | 前端（网页）对外的端口，浏览器访问这个端口 |
 | `BACKEND_PORT` | `40010` | 后端内部监听端口（必须与 config.yaml 的 `port` 一致） |
-| `WEB_IMAGE` | `cli-proxy-web:local` | 前端镜像名 |
-| `CLI_PROXY_IMAGE` | `cli-proxy-api:local` | 后端镜像名 |
+| `WEB_IMAGE` | `ghcr.io/你的名/cli-proxy-web:latest` | 前端镜像（预构建版） |
+| `CLI_PROXY_IMAGE` | `ghcr.io/你的名/cli-proxy-api:latest` | 后端镜像（预构建版） |
 | `CLI_PROXY_CONFIG_PATH` | `./config.yaml` | config.yaml 挂载路径 |
 
 改端口示例（把外网端口改成 9000）：
@@ -278,13 +286,16 @@ docker builder prune -f
 ### Q6：怎么升级到新版本
 
 ```bash
-# 拉最新代码
+# 拉最新代码（触发 GitHub Actions 自动构建新镜像）
 cd CLIProxyAPI && git pull
 cd ../Cli-Proxy-API-Management-Center && git pull
 
-# 重新构建并启动
+# 预构建版：拉取最新镜像并重启（--pull 会强制重新拉取）
 cd ../CLIProxyAPI
-docker compose -f docker-compose.full.yml up -d --build --pull
+docker compose -f docker-compose.full.yml up -d --pull
+
+# 本地构建版：重新编译
+# docker compose -f docker-compose.full.local.yml up -d --build
 ```
 
 ---
@@ -293,11 +304,18 @@ docker compose -f docker-compose.full.yml up -d --build --pull
 
 | 文件 | 位置 | 说明 |
 | --- | --- | --- |
-| `docker-compose.full.yml` | 后端仓库根目录 | 全栈编排（web + backend） |
+| `docker-compose.full.yml` | 后端仓库根目录 | 全栈编排（web + backend）**预构建镜像版（默认）** |
+| `docker-compose.full.local.yml` | 后端仓库根目录 | 全栈编排 **本地构建版** |
 | `Dockerfile` | 后端仓库根目录 | 后端镜像构建（Go 编译） |
 | `Dockerfile` | 前端仓库根目录 | 前端镜像构建（bun 构建 → nginx） |
 | `nginx/default.conf.template` | 前端仓库根目录 | nginx 配置模板（托管前端 + 反代 /v0/） |
+| `.github/workflows/docker-build-push.yml` | 前后端仓库各自 | GitHub Actions：推 main 时自动构建镜像到 GHCR |
 
+> **自动构建（GitHub Actions）**：两个仓库各自推 `main` 分支时，会自动构建并推送镜像到
+> GitHub 容器仓库（GHCR）：`ghcr.io/<你的名>/cli-proxy-api` 和 `ghcr.io/<你的名>/cli-proxy-web`，
+> 无需手动构建。首次使用记得把 GHCR 上的镜像设为 **public**（仓库 Settings → Packages），
+> 否则 `docker compose up` 拉取时会要求登录。
+>
 > 官方全量后端镜像：`eceasy/cli-proxy-api:latest`（后端单独用，不含前端）
 > 若只想跑后端 + 用官方托管的前端页面，也可以直接 `docker run` 官方镜像：
 > ```bash

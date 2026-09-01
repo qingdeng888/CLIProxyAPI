@@ -1,33 +1,34 @@
-# 前后端一起 Docker 部署（全栈 compose）— 预构建镜像版（默认）
+# 前后端一起 Docker 部署（全栈 compose）— 本地构建版
 #
 # 拓扑：
 #   web (nginx 托管前端单文件 + /v0/ 反代) ──► backend (CLIProxyAPI 管理 API)
 #
-# ⚠️ 本文件使用 GitHub Actions 预构建好的镜像（GHCR），无需本地编译，启动最快。
-#    想用本地源码构建？请改用：
-#      docker compose -f docker-compose.full.local.yml up -d
+# ⚠️ 本文件从本地源码 build 镜像（适合开发/调试自己没有发布镜像的场景）。
+#    想用 GitHub Actions 预构建好的镜像？请改用：
+#      docker compose -f docker-compose.full.yml up -d
 #
 # 用法（在后端仓库根目录执行）：
-#   docker compose -f docker-compose.full.yml up -d
+#   docker compose -f docker-compose.full.local.yml up -d --build
 #   访问 http://<host>:40010/   （外网开放端口，默认 40010）
 #
-# 常用变量：
-#   WEB_PORT           前端宿主机端口                       (默认 40010)
-#   BACKEND_PORT       后端内部监听端口                     (默认 40010，须与 config.yaml 的 port 一致)
-#   WEB_IMAGE          前端镜像（默认 GHCR 预构建）
-#   CLI_PROXY_IMAGE    后端镜像（默认 GHCR 预构建）
-#   CLI_PROXY_CONFIG_PATH  后端 config.yaml 路径            (默认 ./config.yaml)
+# 前置：两个仓库为同级目录
+#   ./CLIProxyAPI                  （本仓库，后端）
+#   ../Cli-Proxy-API-Management-Center （前端，与你本地路径一致）
 #
-# 预构建镜像说明：
-#   GitHub Actions 在推 main 分支时自动构建推送：
-#     ghcr.io/<你的GitHub名>/cli-proxy-web:latest     （前端仓库 workflow）
-#     ghcr.io/<你的GitHub名>/cli-proxy-api:latest     （本仓库 workflow）
-#   首次使用记得把 GHCR 上的镜像设为 public，否则要 docker login ghcr.io。
+# 常用变量：
+#   WEB_PORT        前端宿主机端口      (默认 40010，外网开放端口)
+#   BACKEND_PORT    后端监听端口        (默认 40010，须与 config.yaml 的 port 一致)
+#   CLI_PROXY_CONFIG_PATH  后端 config.yaml 路径 (默认 ./config.yaml)
 
 services:
   # ---------- 前端：nginx 托管单文件 SPA + 反代 /v0/ 到后端 ----------
   web:
-    image: ${WEB_IMAGE:-ghcr.io/qingdeng888/cli-proxy-web:latest}
+    build:
+      context: ../Cli-Proxy-API-Management-Center
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+    image: ${WEB_IMAGE:-cli-proxy-web:local}
     container_name: cli-proxy-web
     ports:
       - "${WEB_PORT:-40010}:80"
@@ -41,7 +42,14 @@ services:
 
   # ---------- 后端：CLIProxyAPI 管理 API ----------
   backend:
-    image: ${CLI_PROXY_IMAGE:-ghcr.io/qingdeng888/cli-proxy-api:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-none}
+        BUILD_DATE: ${BUILD_DATE:-unknown}
+    image: ${CLI_PROXY_IMAGE:-cli-proxy-api:local}
     container_name: cli-proxy-api
     environment:
       # 控制面板静态目录（前端单文件可放这里由后端 /management.html 托管）
