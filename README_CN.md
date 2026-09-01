@@ -126,6 +126,8 @@ PackyCode 为本软件用户提供了特别优惠：使用<a href="https://www.p
 
 CLIProxyAPI 用户手册： [https://help.router-for.me/](https://help.router-for.me/cn/)
 
+**Docker 一键部署（前后端完整系统，小白友好）：** [DOCKER_DEPLOY_CN.md](DOCKER_DEPLOY_CN.md)
+
 ## 管理 API 文档
 
 请参见 [MANAGEMENT_API_CN.md](https://help.router-for.me/cn/management/api)
