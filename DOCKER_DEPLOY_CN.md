@@ -57,7 +57,22 @@ docker compose version
 └── Cli-Proxy-API-Management-Center/ # 前端管理面板
 ```
 
-两个仓库必须是 **同级目录**（`docker-compose.full.yml` 里用 `../Cli-Proxy-API-Management-Center` 引用前端）。
+### 2. 准备仓库
+
+**用预构建镜像（推荐）只需要克隆后端一个仓库**（compose 文件在这里，镜像从 GHCR 拉取，不依赖前端源码）：
+
+```bash
+git clone https://github.com/你的账号/CLIProxyAPI.git
+cd CLIProxyAPI
+```
+
+**用本地构建镜像**才需要两个仓库（compose 会用相对路径找前端源码构建）：
+
+```
+我的目录/
+├── CLIProxyAPI/                      # 后端（本仓库）
+└── Cli-Proxy-API-Management-Center/ # 前端管理面板
+```
 
 ```bash
 git clone https://github.com/你的账号/CLIProxyAPI.git
@@ -77,18 +92,23 @@ cd CLIProxyAPI
 cp config.example.yaml config.yaml
 ```
 
-然后用编辑器打开 `config.yaml`，**至少修改两处**：
+然后用编辑器打开 `config.yaml`，**修改两处即可**（端口**不用动**，见下方说明）：
 
 ```yaml
-# 1) 端口（默认 8317，改成你服务器开放的外网端口，比如 40010）
+# 端口不用改！容器内部监听端口由 compose 里的 BACKEND_PORT 控制（默认 40010），
+# 与宿主机对外开放的端口（WEB_PORT）无关。
 host: ""
 port: 40010
 
-# 2) 管理密码（打开面板要登录用的）
+# 管理密码（打开面板要登录用的）
 remote-management:
   allow-remote: true          # 必须改成 true！否则网页打不开管理接口
   secret-key: "你的登录密码"   # ← 改成你自己的密码
 ```
+
+> **端口到底改哪里？**
+> - `config.yaml` 的 `port` 是**容器内部**监听端口，跟外部访问无关，**保持默认即可**（40010）
+> - 服务器对外端口由 `docker-compose.full.yml` 里的 `ports` 映射决定，改那里（见下文「端口说明」）
 
 > **为什么 `allow-remote` 必须 `true`？**
 > 网页(nginx)访问后端时，后端看到的来源 IP 是 Docker 网络内部的地址，不是本机 127.0.0.1。
@@ -152,21 +172,61 @@ docker compose -f docker-compose.full.yml restart
 docker compose -f docker-compose.full.yml down
 ```
 
-### 端口说明 / 常用环境变量
+### 端口说明（重点：端口只在 compose 里改）
+
+**一句话：外网端口只由 `docker-compose.full.yml` 的 `ports` 决定，`config.yaml` 里的端口不用动。**
+
+```
+浏览器访问 ──► 宿主机 :40010（WEB_PORT）──► nginx 容器 :80 ──► 后端容器 :40010（BACKEND_PORT）
+                 ↑ 改这里就行                  ↑ 内部，不用管          ↑ 内部，不用管
+```
+
+`docker-compose.full.yml` 里关键一行：
+
+```yaml
+ports:
+  - "${WEB_PORT:-40010}:80"   # 冒号左边 = 宿主机对外开放端口（默认 40010）
+```
+
+- `${WEB_PORT:-40010}` 语法：**如果环境变量 `WEB_PORT` 存在就用它，否则用默认值 `40010`**
+- `WEB_PORT` 不在任何文件里"定义"，它只是个变量名，有 3 种改端口的方式：
+
+**方式 1：直接改 yml**（最简单，一劳永逸）
+
+把 `docker-compose.full.yml` 里这一行改成你要的端口：
+
+```yaml
+ports:
+  - "${WEB_PORT:-5000}:80"
+```
+
+**方式 2：启动时传环境变量**（临时，不改文件）
+
+```bash
+WEB_PORT=5000 docker compose -f docker-compose.full.yml up -d
+```
+
+**方式 3：建 `.env` 文件**（推荐，长期保存）
+
+在 `CLIProxyAPI` 仓库根目录创建一个 `.env` 文件，写上：
+
+```bash
+WEB_PORT=5000
+```
+
+compose 启动时自动读取 `.env`（不需要改 yml 也不用每次输变量）。
+
+**其他环境变量：**
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `WEB_PORT` | `40010` | 前端（网页）对外的端口，浏览器访问这个端口 |
-| `BACKEND_PORT` | `40010` | 后端内部监听端口（必须与 config.yaml 的 `port` 一致） |
-| `WEB_IMAGE` | `ghcr.io/你的名/cli-proxy-web:latest` | 前端镜像（预构建版） |
-| `CLI_PROXY_IMAGE` | `ghcr.io/你的名/cli-proxy-api:latest` | 后端镜像（预构建版） |
+| `WEB_PORT` | `40010` | 宿主机对外开放端口（浏览器访问这个） |
+| `BACKEND_PORT` | `40010` | 后端容器内部监听端口（正常不用动） |
+| `WEB_IMAGE` | `ghcr.io/qingdeng888/cli-proxy-web:latest` | 前端镜像（预构建版） |
+| `CLI_PROXY_IMAGE` | `ghcr.io/qingdeng888/cli-proxy-api:latest` | 后端镜像（预构建版） |
 | `CLI_PROXY_CONFIG_PATH` | `./config.yaml` | config.yaml 挂载路径 |
 
-改端口示例（把外网端口改成 9000）：
-
-```bash
-WEB_PORT=9000 BACKEND_PORT=40010 docker compose -f docker-compose.full.yml up -d
-```
+> ⚠️ 改 `WEB_PORT` 时，记得同时在你的云服务器安全组 / 防火墙放行该端口。
 
 ---
 
@@ -260,14 +320,20 @@ docker compose -f docker-compose.full.yml restart backend
 
 ### Q3：改了端口没生效
 
-端口改了要两边一致：
+**原因**：改了 `config.yaml` 的 `port` 但没改 compose——外部访问走的是 compose 的 `ports` 映射。
 
-1. `config.yaml` 的 `port` 改成新端口
-2. 启动时用 `BACKEND_PORT=<新端口>` 覆盖 compose 里的默认值
+**正确做法**：改 `docker-compose.full.yml` 的 `ports` 映射（或设 `WEB_PORT`，见上文「端口说明」），然后重启：
 
 ```bash
-BACKEND_PORT=12345 docker compose -f docker-compose.full.yml up -d
+# 改了 compose 后需要重建容器才能生效
+docker compose -f docker-compose.full.yml up -d
 ```
+
+> config.yaml 里的 `port` 是容器内部端口，不用改。若确实改了它（比如改成 5000），
+> 则需同步 `BACKEND_PORT=5000` 并保持 `expose` 一致：
+> ```bash
+> BACKEND_PORT=5000 docker compose -f docker-compose.full.yml up -d
+> ```
 
 ### Q4：密码忘了怎么办
 

@@ -12,8 +12,8 @@
 #   访问 http://<host>:40010/   （外网开放端口，默认 40010）
 #
 # 常用变量：
-#   WEB_PORT           前端宿主机端口                       (默认 40010)
-#   BACKEND_PORT       后端内部监听端口                     (默认 40010，须与 config.yaml 的 port 一致)
+#   WEB_PORT           宿主机对外开放端口                   (默认 40010，浏览器访问这个)
+#   BACKEND_PORT       后端容器内部监听端口                 (默认 40010，须与 config.yaml 的 port 一致)
 #   WEB_IMAGE          前端镜像（默认 GHCR 预构建）
 #   CLI_PROXY_IMAGE    后端镜像（默认 GHCR 预构建）
 #   CLI_PROXY_CONFIG_PATH  后端 config.yaml 路径            (默认 ./config.yaml)
