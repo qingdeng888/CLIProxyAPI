@@ -208,7 +208,14 @@ WEB_PORT=5000 docker compose -f docker-compose.full.yml up -d
 
 **方式 3：建 `.env` 文件**（推荐，长期保存）
 
-在 `CLIProxyAPI` 仓库根目录创建一个 `.env` 文件，写上：
+仓库里已经带了一个 `.env.example` 模板（里面有 WEB_PORT、BACKEND_PORT、镜像名等所有变量说明），复制成 `.env` 再改：
+
+```bash
+cp .env.example .env
+# 编辑 .env，把要改的变量取消注释并填值
+```
+
+`.env` 里面写上：
 
 ```bash
 WEB_PORT=5000
