@@ -13,7 +13,7 @@
 #
 # 常用变量：
 #   WEB_PORT           宿主机对外开放端口                   (默认 40010，浏览器访问这个)
-#   BACKEND_PORT       后端容器内部监听端口                 (默认 40010，须与 config.yaml 的 port 一致)
+#   BACKEND_PORT       后端容器内部监听端口                 (默认 8317，须与 config.yaml 的 port 一致)
 #   WEB_IMAGE          前端镜像（默认 GHCR 预构建）
 #   CLI_PROXY_IMAGE    后端镜像（默认 GHCR 预构建）
 #   CLI_PROXY_CONFIG_PATH  后端 config.yaml 路径            (默认 ./config.yaml)
@@ -34,7 +34,7 @@ services:
     environment:
       # 渲染 nginx 模板（/etc/nginx/templates/*.template）使用
       BACKEND_HOST: backend
-      BACKEND_PORT: ${BACKEND_PORT:-40010}
+      BACKEND_PORT: ${BACKEND_PORT:-8317}
     depends_on:
       - backend
     restart: unless-stopped
@@ -47,7 +47,7 @@ services:
       # 控制面板静态目录（前端单文件可放这里由后端 /management.html 托管）
       MANAGEMENT_STATIC_PATH: /CLIProxyAPI/static
       # 健康检查端口与后端监听端口保持一致
-      HEALTHCHECK_PORT: ${BACKEND_PORT:-40010}
+      HEALTHCHECK_PORT: ${BACKEND_PORT:-8317}
     volumes:
       # 挂载你的实际配置文件（不挂载则用镜像内置 config.example.yaml）
       - ${CLI_PROXY_CONFIG_PATH:-./config.yaml}:/CLIProxyAPI/config.yaml
@@ -55,7 +55,7 @@ services:
       - ${CLI_PROXY_LOG_PATH:-./logs}:/CLIProxyAPI/logs
       - ${CLI_PROXY_PLUGIN_PATH:-./plugins}:/CLIProxyAPI/plugins
     expose:
-      - "${BACKEND_PORT:-40010}"
+      - "${BACKEND_PORT:-8317}"
     restart: unless-stopped
 
 # 只需访问前端页面（40010）即可使用完整系统；

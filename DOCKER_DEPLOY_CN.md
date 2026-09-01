@@ -95,10 +95,10 @@ cp config.example.yaml config.yaml
 然后用编辑器打开 `config.yaml`，**修改两处即可**（端口**不用动**，见下方说明）：
 
 ```yaml
-# 端口不用改！容器内部监听端口由 compose 里的 BACKEND_PORT 控制（默认 40010），
-# 与宿主机对外开放的端口（WEB_PORT）无关。
+# 端口不用改！config.example.yaml 默认 port: 8317，compose 的 BACKEND_PORT 默认也是 8317，
+# 两者一致即可。宿主机对外开放的端口（WEB_PORT）跟这个无关。
 host: ""
-port: 40010
+port: 8317
 
 # 管理密码（打开面板要登录用的）
 remote-management:
@@ -107,8 +107,8 @@ remote-management:
 ```
 
 > **端口到底改哪里？**
-> - `config.yaml` 的 `port` 是**容器内部**监听端口，跟外部访问无关，**保持默认即可**（40010）
-> - 服务器对外端口由 `docker-compose.full.yml` 里的 `ports` 映射决定，改那里（见下文「端口说明」）
+> - `config.yaml` 的 `port` 是**容器内部**监听端口，**保持默认（8317）即可**，不要改
+> - 服务器对外端口由 `docker-compose.full.yml` 里的 `ports` 映射决定（默认 40010），改那里（见下文「端口说明」）
 
 > **为什么 `allow-remote` 必须 `true`？**
 > 网页(nginx)访问后端时，后端看到的来源 IP 是 Docker 网络内部的地址，不是本机 127.0.0.1。
@@ -177,8 +177,8 @@ docker compose -f docker-compose.full.yml down
 **一句话：外网端口只由 `docker-compose.full.yml` 的 `ports` 决定，`config.yaml` 里的端口不用动。**
 
 ```
-浏览器访问 ──► 宿主机 :40010（WEB_PORT）──► nginx 容器 :80 ──► 后端容器 :40010（BACKEND_PORT）
-                 ↑ 改这里就行                  ↑ 内部，不用管          ↑ 内部，不用管
+浏览器访问 ──► 宿主机 :40010（WEB_PORT）──► nginx 容器 :80 ──► 后端容器 :8317（BACKEND_PORT）
+                 ↑ 改这里就行                  ↑ 内部，不用管        ↑ 内部，保持默认
 ```
 
 `docker-compose.full.yml` 里关键一行：
@@ -228,7 +228,7 @@ compose 启动时自动读取 `.env`（不需要改 yml 也不用每次输变量
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `WEB_PORT` | `40010` | 宿主机对外开放端口（浏览器访问这个） |
-| `BACKEND_PORT` | `40010` | 后端容器内部监听端口（正常不用动） |
+| `BACKEND_PORT` | `8317` | 后端容器内部监听端口（默认与 config.yaml 的 `port` 一致，不用动） |
 | `WEB_IMAGE` | `ghcr.io/qingdeng888/cli-proxy-web:latest` | 前端镜像（预构建版） |
 | `CLI_PROXY_IMAGE` | `ghcr.io/qingdeng888/cli-proxy-api:latest` | 后端镜像（预构建版） |
 | `CLI_PROXY_CONFIG_PATH` | `./config.yaml` | config.yaml 挂载路径 |
