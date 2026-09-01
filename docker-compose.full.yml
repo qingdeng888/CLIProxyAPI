@@ -22,7 +22,7 @@
 #   GitHub Actions 在推 main 分支时自动构建推送：
 #     ghcr.io/<你的GitHub名>/cli-proxy-web:latest     （前端仓库 workflow）
 #     ghcr.io/<你的GitHub名>/cli-proxy-api:latest     （本仓库 workflow）
-#   首次使用记得把 GHCR 上的镜像设为 public，否则要 docker login ghcr.io。
+#   首次使用无需额外设置：GHCR 容器镜像默认公开，任何服务器免登录即可拉取。
 
 services:
   # ---------- 前端：nginx 托管单文件 SPA + 反代 /v0/ 到后端 ----------

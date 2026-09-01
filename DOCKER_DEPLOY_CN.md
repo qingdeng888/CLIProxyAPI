@@ -313,8 +313,7 @@ docker compose -f docker-compose.full.yml up -d --pull
 
 > **自动构建（GitHub Actions）**：两个仓库各自推 `main` 分支时，会自动构建并推送镜像到
 > GitHub 容器仓库（GHCR）：`ghcr.io/<你的名>/cli-proxy-api` 和 `ghcr.io/<你的名>/cli-proxy-web`，
-> 无需手动构建。首次使用记得把 GHCR 上的镜像设为 **public**（仓库 Settings → Packages），
-> 否则 `docker compose up` 拉取时会要求登录。
+> 无需手动构建。GHCR 容器镜像**默认公开**，任何服务器免登录即可 `docker compose up` 拉取。
 >
 > 官方全量后端镜像：`eceasy/cli-proxy-api:latest`（后端单独用，不含前端）
 > 若只想跑后端 + 用官方托管的前端页面，也可以直接 `docker run` 官方镜像：
