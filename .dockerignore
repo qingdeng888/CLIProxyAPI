@@ -5,8 +5,6 @@
 # Docker and CI/CD related files
 docker-compose.yml
 docker-compose.cluster.yml
-docker-compose.full.yml
-docker-compose.full.local.yml
 .dockerignore
 .gitignore
 .goreleaser.yml

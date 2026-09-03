@@ -130,7 +130,7 @@ PackyCode provides special discounts for our software users: register using <a h
 
 CLIProxyAPI Guides: [https://help.router-for.me/](https://help.router-for.me/)
 
-**Docker one-click deployment (full stack, beginner-friendly):** [DOCKER_DEPLOY_CN.md](DOCKER_DEPLOY_CN.md)
+**Docker one-click deployment (single container with bundled management panel, beginner-friendly):** [DOCKER_DEPLOY_CN.md](DOCKER_DEPLOY_CN.md)
 
 ## Management API
 

@@ -1,398 +1,107 @@
-# Docker 一键部署（前后端完整系统）
+# Docker 部署（单容器直出，内置管理面板）
 
-> 本文面向 **完全没有 Docker 经验的小白**。跟着步骤做，就能把你的 CLIProxyAPI 后端 + 管理面板（Web UI）一起跑起来，不需要手动装 Go、Node、bun 这些环境。
+> 本方案已移除 nginx 前端容器：后端单容器直接对外服务，管理面板（自定义前端
+> `Cli-Proxy-API-Management-Center` 构建的单文件 SPA）随镜像内置，访问
+> `http://<host>:<端口>/management.html` 即可使用。
 
----
-
-## 一、这套部署是什么？
-
-你的项目是两个仓库：
-
-| 仓库 | 作用 |
-| --- | --- |
-| `CLIProxyAPI` | 后端服务（真正的代理服务器，提供 API） |
-| `Cli-Proxy-API-Management-Center` | 前端网页（管理面板，浏览器里操作代理池、API Key 等） |
-
-本方案用 **Docker 把两者编排在一起**，拓扑如下：
+## 一、架构
 
 ```
-你打开浏览器
-    │
-    ▼
-http://你的服务器IP:40010/
-    │
-    ├── /        → 前端网页 (nginx 容器里)
-    └── /v0/     → 反向代理到后端 (cli-proxy-api 容器)
+浏览器 ──► 宿主机端口（.env 的 PORT_MAP，默认 13001）──► cli-proxy-api 容器 :8317
+              │
+              ├─ /management.html        内置管理面板（前端仓库 CI 产物）
+              ├─ /v0/management/*        管理 API（登录密码 = secret-key）
+              ├─ /v1/ /v1beta/ /openai/  OpenAI/Claude/Gemini 兼容代理 API
+              └─ /v1/models              模型列表（用 api-keys 鉴权）
 ```
 
-- 打开页面就是管理面板，**不需要单独配前端地址**（前端会自动探测同源 API）
-- 只需要开放 **一个端口**（默认 `40010`），前端和后端都走它
+面板来源：`Dockerfile` 里的 `ARG WEB_IMAGE`，默认 `ghcr.io/qingdeng888/cli-proxy-web:latest`
+（前端仓库 GitHub Actions 产物）。构建时该镜像内的 `index.html` 会被拷入后端镜像
+`/CLIProxyAPI/static/management.html`，并通过 `MANAGEMENT_STATIC_PATH` 指向它，
+配合 `config.yaml` 的 `disable-auto-update-panel: true`，运行时不会被上游面板覆盖。
 
----
-
-## 二、准备工作
-
-### 1. 安装 Docker（只装一次）
-
-**Linux（Ubuntu/Debian）：**
-
-```bash
-curl -fsSL https://get.docker.com | sh
-```
-
-**Windows / macOS：** 安装 [Docker Desktop](https://www.docker.com/products/docker-desktop/)，安装后启动即可。
-
-验证是否装好（能显示版本号就 OK）：
-
-```bash
-docker --version
-docker compose version
-```
-
-### 2. 准备两个仓库（放在同级目录）
-
-```
-我的目录/
-├── CLIProxyAPI/                      # 后端（本仓库）
-└── Cli-Proxy-API-Management-Center/ # 前端管理面板
-```
-
-### 2. 准备仓库
-
-**用预构建镜像（推荐）只需要克隆后端一个仓库**（compose 文件在这里，镜像从 GHCR 拉取，不依赖前端源码）：
-
-```bash
-git clone https://github.com/你的账号/CLIProxyAPI.git
-cd CLIProxyAPI
-```
-
-**用本地构建镜像**才需要两个仓库（compose 会用相对路径找前端源码构建）：
-
-```
-我的目录/
-├── CLIProxyAPI/                      # 后端（本仓库）
-└── Cli-Proxy-API-Management-Center/ # 前端管理面板
-```
-
-```bash
-git clone https://github.com/你的账号/CLIProxyAPI.git
-git clone https://github.com/你的账号/Cli-Proxy-API-Management-Center.git
-```
-
----
-
-## 三、最简启动（5 分钟跑起来）
-
-### 第 1 步：准备配置文件
-
-进入后端仓库，复制示例配置：
+## 二、最简启动
 
 ```bash
 cd CLIProxyAPI
+
+# 1. 配置（端口保持默认 8317，对外映射在 .env 改）
 cp config.example.yaml config.yaml
+#   编辑 config.yaml：
+#     remote-management.secret-key     管理面板登录密码
+#     remote-management.allow-remote   true（远程访问面板需要）
+#     api-keys                         代理 API 密钥（保留模板值会触发 safe-mode 禁用代理端点）
+#     disable-auto-update-panel        true（使用内置面板）
+
+# 2. 对外端口（宿主机侧，容器内部端口不变）
+echo "PORT_MAP=13001" > .env
+
+# 3. 启动
+docker compose up -d
 ```
 
-然后用编辑器打开 `config.yaml`，**修改两处即可**（端口**不用动**，见下方说明）：
+访问：
 
-```yaml
-# 端口不用改！config.example.yaml 默认 port: 8317，compose 的 BACKEND_PORT 默认也是 8317，
-# 两者一致即可。宿主机对外开放的端口（WEB_PORT）跟这个无关。
-host: ""
-port: 8317
+- 管理面板：`http://<服务器IP>:13001/management.html`
+- 模型列表：`curl http://<服务器IP>:13001/v1/models -H "Authorization: Bearer <你的api-key>"`
+- OpenAI 兼容 base_url：`http://<服务器IP>:13001/v1`
 
-# 管理密码（打开面板要登录用的）
-remote-management:
-  allow-remote: true          # 必须改成 true！否则网页打不开管理接口
-  secret-key: "你的登录密码"   # ← 改成你自己的密码
-```
+## 三、镜像来源三选一
 
-> **端口到底改哪里？**
-> - `config.yaml` 的 `port` 是**容器内部**监听端口，**保持默认（8317）即可**，不要改
-> - 服务器对外端口由 `docker-compose.full.yml` 里的 `ports` 映射决定（默认 40010），改那里（见下文「端口说明」）
+| 方式 | 命令 | 适用 |
+|---|---|---|
+| 直接用预构建后端镜像 | `docker compose up -d`（默认） | 最快，无需本地编译 |
+| 本地构建后端（内置线上面板） | `docker compose build && docker compose up -d` | 改过后端源码 |
+| 本地构建后端 + 本地构建面板 | 见下 | 前后端源码都在改（开发调试） |
 
-> **为什么 `allow-remote` 必须 `true`？**
-> 网页(nginx)访问后端时，后端看到的来源 IP 是 Docker 网络内部的地址，不是本机 127.0.0.1。
-> 后端为了安全默认只允许本机访问管理接口，所以 Docker 部署必须打开这个开关。
-
-### 第 2 步：启动
-
-**两种启动方式，选一种即可：**
-
-**方式 A：预构建镜像（默认，推荐）** — 用 GitHub Actions 已经构建好的镜像，**不需要本地编译，秒级启动**：
+本地构建面板并内置：
 
 ```bash
-docker compose -f docker-compose.full.yml up -d
+# 在 CLIProxyAPI 的上一级目录需存在前端仓库（clone qingdeng888/Cli-Proxy-API-Management-Center）
+docker build -t cli-proxy-web:local -f ../Cli-Proxy-API-Management-Center/Dockerfile ../Cli-Proxy-API-Management-Center
+docker build -t cli-proxy-api:local --build-arg WEB_IMAGE=cli-proxy-web:local .
+CLI_PROXY_IMAGE=cli-proxy-api:local docker compose up -d --no-build
 ```
-
-**方式 B：本地构建镜像**（改了自己代码 / 没发布镜像时）：
-
-```bash
-docker compose -f docker-compose.full.local.yml up -d --build
-```
-
-> 方式 B 第一次运行会**自动构建镜像**（下载编译环境 + 编译，需要几分钟，耐心等）。
-> 之后代码没变可以省略 `--build`：`docker compose -f docker-compose.full.local.yml up -d`
-
-### 第 3 步：访问
-
-浏览器打开：
-
-```
-http://你的服务器IP:40010/
-```
-
-登录页输入你刚才在 `config.yaml` 里设置的 `secret-key` 密码即可。
-
----
 
 ## 四、常用运维命令
 
-> 以下命令的 `-f docker-compose.full.yml` 换成 `-f docker-compose.full.local.yml` 同样适用（本地构建版）。
-
 ```bash
-# 查看运行状态（两个容器都应该是 Up 状态）
-docker compose -f docker-compose.full.yml ps
-
-# 查看日志（实时滚动，Ctrl+C 退出）
-docker compose -f docker-compose.full.yml logs -f
-
-# 只查看后端日志
-docker compose -f docker-compose.full.yml logs -f backend
-
-# 只查看前端日志
-docker compose -f docker-compose.full.yml logs -f web
-
-# 停止服务（不会删数据）
-docker compose -f docker-compose.full.yml stop
-
-# 重启服务
-docker compose -f docker-compose.full.yml restart
-
-# 彻底停止并删除容器（配置数据在挂载目录里，不会被删）
-docker compose -f docker-compose.full.yml down
+docker compose ps                     # 状态
+docker compose logs -f                # 日志
+docker compose restart                # 重启
+docker compose down                   # 停止（数据在挂载目录，不丢）
+docker compose pull && docker compose up -d   # 升级到最新预构建镜像
 ```
 
-### 端口说明（重点：端口只在 compose 里改）
+配置修改：`config.yaml` 热加载生效（文件监视），改端口/挂载需 `docker compose up -d` 重建容器。
 
-**一句话：外网端口只由 `docker-compose.full.yml` 的 `ports` 决定，`config.yaml` 里的端口不用动。**
+## 五、端口说明
 
-```
-浏览器访问 ──► 宿主机 :40010（WEB_PORT）──► nginx 容器 :80 ──► 后端容器 :8317（BACKEND_PORT）
-                 ↑ 改这里就行                  ↑ 内部，不用管        ↑ 内部，保持默认
-```
+- 对外端口只在 `docker-compose.yml` / `.env` 改：`"${PORT_MAP:-13001}:8317"`
+- `config.yaml` 的 `port: 8317` 是容器内部端口，两者一致即可，一般不动
 
-`docker-compose.full.yml` 里关键一行：
+## 六、常见问题
 
-```yaml
-ports:
-  - "${WEB_PORT:-40010}:80"   # 冒号左边 = 宿主机对外开放端口（默认 40010）
-```
+### Q1：代理 API 返回 400 且提示 safe-mode
+`api-keys` 还是模板值，后端自动禁用代理端点。登录面板改掉 api-keys 即恢复。
 
-- `${WEB_PORT:-40010}` 语法：**如果环境变量 `WEB_PORT` 存在就用它，否则用默认值 `40010`**
-- `WEB_PORT` 不在任何文件里"定义"，它只是个变量名，有 3 种改端口的方式：
+### Q2：面板登录 403 "remote management disabled"
+`config.yaml` 里 `remote-management.allow-remote` 设为 `true` 后重启容器。
 
-**方式 1：直接改 yml**（最简单，一劳永逸）
+### Q3：面板看不到新功能（如代理池）
+内置面板来自 `WEB_IMAGE`。确认前端仓库 CI 已构建新镜像（push 到 main 触发），再
+`docker compose build --pull` 重建后端镜像；或直接 `docker compose pull` 用最新预构建后端。
 
-把 `docker-compose.full.yml` 里这一行改成你要的端口：
-
-```yaml
-ports:
-  - "${WEB_PORT:-5000}:80"
-```
-
-**方式 2：启动时传环境变量**（临时，不改文件）
-
-```bash
-WEB_PORT=5000 docker compose -f docker-compose.full.yml up -d
-```
-
-**方式 3：建 `.env` 文件**（推荐，长期保存）
-
-仓库里已经带了一个 `.env.example` 模板（里面有 WEB_PORT、BACKEND_PORT、镜像名等所有变量说明），复制成 `.env` 再改：
-
-```bash
-cp .env.example .env
-# 编辑 .env，把要改的变量取消注释并填值
-```
-
-`.env` 里面写上：
-
-```bash
-WEB_PORT=5000
-```
-
-compose 启动时自动读取 `.env`（不需要改 yml 也不用每次输变量）。
-
-**其他环境变量：**
-
-| 变量 | 默认值 | 说明 |
-| --- | --- | --- |
-| `WEB_PORT` | `40010` | 宿主机对外开放端口（浏览器访问这个） |
-| `BACKEND_PORT` | `8317` | 后端容器内部监听端口（默认与 config.yaml 的 `port` 一致，不用动） |
-| `WEB_IMAGE` | `ghcr.io/qingdeng888/cli-proxy-web:latest` | 前端镜像（预构建版） |
-| `CLI_PROXY_IMAGE` | `ghcr.io/qingdeng888/cli-proxy-api:latest` | 后端镜像（预构建版） |
-| `CLI_PROXY_CONFIG_PATH` | `./config.yaml` | config.yaml 挂载路径 |
-
-> ⚠️ 改 `WEB_PORT` 时，记得同时在你的云服务器安全组 / 防火墙放行该端口。
-
----
-
-## 五、自定义配置（进阶）
-
-### 修改密码
-
-后端要求密码是 **bcrypt 哈希**（不是明文）。把明文密码变成哈希：
-
-**方法一（推荐，用本项目自带 Go 环境）：**
-
-```bash
-cd CLIProxyAPI
-cat > /tmp/genhash.go <<'EOF'
-package main
-
-import (
-	"fmt"
-	"golang.org/x/crypto/bcrypt"
-)
-
-func main() {
-	h, _ := bcrypt.GenerateFromPassword([]byte("你的新密码"), bcrypt.DefaultCost)
-	fmt.Println(string(h))
-}
-EOF
-go run /tmp/genhash.go
-```
-
-把输出的 `$2a$10$...` 复制到 `config.yaml` 的 `secret-key:`，然后：
-
-```bash
-docker compose -f docker-compose.full.yml up -d
-```
-
-后端启动时会重新读取 config.yaml（自动热加载），也可以用：
-
-```bash
-docker restart cli-proxy-api
-```
-
-### 修改代理池
-
-代理池（本项目的二开功能）在 `config.yaml` 里：
-
-```yaml
-proxy-pool:
-  - name: proxy-1
-    url: http://user:pass@1.2.3.4:11189
-    enabled: true
-```
-
-也可以在网页管理面板里点「代理池」页面增删改查（保存后后端自动热加载，不用重启容器）。
-
-### 挂载目录说明
-
-| 宿主机目录 | 容器内目录 | 作用 |
-| --- | --- | --- |
-| `./config.yaml` | `/CLIProxyAPI/config.yaml` | 后端配置 |
-| `./auths` | `/root/.cli-proxy-api` | 认证文件（OAuth 登录的 Cookie 等） |
-| `./logs` | `/CLIProxyAPI/logs` | 日志 |
-| `./plugins` | `/CLIProxyAPI/plugins` | 插件 |
-
-这些目录都在 `docker-compose.full.yml` 旁边的宿主机目录里，想备份直接拷贝目录即可。
-
----
-
-## 六、常见问题（FAQ）
-
-### Q1：打开网页白屏 / 连不上
-
-```bash
-# 1. 检查容器是否都在运行
-docker compose -f docker-compose.full.yml ps
-
-# 2. 看后端日志有没有报错
-docker compose -f docker-compose.full.yml logs -f backend
-```
-
-如果容器是 `Restarting`，多半是后端启动失败。把日志贴出来排查。
-
-### Q2：登录提示 403 "remote management disabled"
-
-**原因**：`config.yaml` 里 `remote-management.allow-remote` 不是 `true`。
-
-**解决**：改完后端会自动热重载；不生效就重启：
-
-```bash
-docker compose -f docker-compose.full.yml restart backend
-```
-
-### Q3：改了端口没生效
-
-**原因**：改了 `config.yaml` 的 `port` 但没改 compose——外部访问走的是 compose 的 `ports` 映射。
-
-**正确做法**：改 `docker-compose.full.yml` 的 `ports` 映射（或设 `WEB_PORT`，见上文「端口说明」），然后重启：
-
-```bash
-# 改了 compose 后需要重建容器才能生效
-docker compose -f docker-compose.full.yml up -d
-```
-
-> config.yaml 里的 `port` 是容器内部端口，不用改。若确实改了它（比如改成 5000），
-> 则需同步 `BACKEND_PORT=5000` 并保持 `expose` 一致：
-> ```bash
-> BACKEND_PORT=5000 docker compose -f docker-compose.full.yml up -d
-> ```
-
-### Q4：密码忘了怎么办
-
-直接改 `config.yaml` 的 `secret-key`（生成 bcrypt 哈希方法见上文），然后重启后端容器。
-
-### Q5：日志太多 / 磁盘满了
-
-```bash
-# 查看占用
-docker system df
-
-# 清理不再使用的构建缓存
-docker builder prune -f
-```
-
-### Q6：怎么升级到新版本
-
-```bash
-# 拉最新代码（触发 GitHub Actions 自动构建新镜像）
-cd CLIProxyAPI && git pull
-cd ../Cli-Proxy-API-Management-Center && git pull
-
-# 预构建版：拉取最新镜像并重启（--pull 会强制重新拉取）
-cd ../CLIProxyAPI
-docker compose -f docker-compose.full.yml up -d --pull
-
-# 本地构建版：重新编译
-# docker compose -f docker-compose.full.local.yml up -d --build
-```
-
----
+### Q4：临时覆盖内置面板
+运行时追加挂载即可：`docker run -v ./my-static:/CLIProxyAPI/static ...`
+（挂载目录里有 `management.html` 时优先生效）。
 
 ## 七、文件清单
 
-| 文件 | 位置 | 说明 |
-| --- | --- | --- |
-| `docker-compose.full.yml` | 后端仓库根目录 | 全栈编排（web + backend）**预构建镜像版（默认）** |
-| `docker-compose.full.local.yml` | 后端仓库根目录 | 全栈编排 **本地构建版** |
-| `Dockerfile` | 后端仓库根目录 | 后端镜像构建（Go 编译） |
-| `Dockerfile` | 前端仓库根目录 | 前端镜像构建（bun 构建 → nginx） |
-| `nginx/default.conf.template` | 前端仓库根目录 | nginx 配置模板（托管前端 + 反代 /v0/） |
-| `.github/workflows/docker-build-push.yml` | 前后端仓库各自 | GitHub Actions：推 main 时自动构建镜像到 GHCR |
-
-> **自动构建（GitHub Actions）**：两个仓库各自推 `main` 分支时，会自动构建并推送镜像到
-> GitHub 容器仓库（GHCR）：`ghcr.io/<你的名>/cli-proxy-api` 和 `ghcr.io/<你的名>/cli-proxy-web`，
-> 无需手动构建。GHCR 容器镜像**默认公开**，任何服务器免登录即可 `docker compose up` 拉取。
->
-> 官方全量后端镜像：`eceasy/cli-proxy-api:latest`（后端单独用，不含前端）
-> 若只想跑后端 + 用官方托管的前端页面，也可以直接 `docker run` 官方镜像：
-> ```bash
-> docker run -d --name cpa -p 40010:40010 \
->   -v $(pwd)/config.yaml:/CLIProxyAPI/config.yaml \
->   -v $(pwd)/logs:/CLIProxyAPI/logs \
->   eceasy/cli-proxy-api:latest
-> ```
+| 文件 | 作用 |
+|---|---|
+| `docker-compose.yml` | 单容器部署（本方案） |
+| `docker-compose.cluster.yml` | 集群模式（可选） |
+| `Dockerfile` | 后端镜像构建；`WEB_IMAGE` 参数指定内置面板来源 |
+| `config.example.yaml` | 配置模板（生成你的 `config.yaml`） |
+| `.env` | 端口/镜像等部署变量 |

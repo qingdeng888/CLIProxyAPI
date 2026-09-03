@@ -9,13 +9,18 @@ services:
         VERSION: ${VERSION:-dev}
         COMMIT: ${COMMIT:-none}
         BUILD_DATE: ${BUILD_DATE:-unknown}
+        # 面板来源镜像（qingdeng888 前端仓库 CI 产物）；本地构建前端后可覆盖：
+        #   docker build --build-arg WEB_IMAGE=cli-proxy-web:local
+        WEB_IMAGE: ${WEB_IMAGE:-ghcr.io/qingdeng888/cli-proxy-web:latest}
     container_name: cli-proxy-api
     # env_file:
     #   - .env
     environment:
       DEPLOY: ${DEPLOY:-}
+      # 管理面板（自定义前端单文件 SPA）已随镜像内置于 /CLIProxyAPI/static，
+      # 无需额外挂载。如需临时覆盖面板，自行追加 -v ./static:/CLIProxyAPI/static
     ports:
-      - "8317:8317"
+      - "${PORT_MAP:-13001}:8317"
       - "8085:8085"
       - "1455:1455"
       - "54545:54545"
