@@ -6,7 +6,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 )
 
-func TestResolveRotateRoundRobin(t *testing.T) {
+func TestResolveRotateRandomEnabled(t *testing.T) {
 	cfg := &config.Config{
 		ProxyPool: []config.ProxyEntry{
 			{Name: "px-1", URL: "socks5://1.2.3.4:1080"},
@@ -15,15 +15,24 @@ func TestResolveRotateRoundRobin(t *testing.T) {
 	}
 	Sync(cfg)
 
-	want := []string{"socks5://1.2.3.4:1080", "http://5.6.7.8:8080", "socks5://1.2.3.4:1080"}
+	valid := map[string]bool{"socks5://1.2.3.4:1080": true, "http://5.6.7.8:8080": true}
 	for _, selector := range []string{"pool", "pool:*", "rotate"} {
-		// Sync resets the round-robin counter so each selector starts fresh.
-		Sync(cfg)
-		for i, expected := range want {
-			if got := Resolve(selector); got != expected {
-				t.Fatalf("Resolve(%q) call %d = %q, want %q", selector, i+1, got, expected)
+		for i := 0; i < 20; i++ {
+			got := Resolve(selector)
+			if !valid[got] {
+				t.Fatalf("Resolve(%q) call %d = %q, want one of the enabled pool URLs", selector, i+1, got)
 			}
 		}
+	}
+
+	// Random selection should not collapse to a single proxy over enough draws.
+	Sync(cfg)
+	seen := map[string]bool{}
+	for i := 0; i < 50; i++ {
+		seen[Resolve("pool")] = true
+	}
+	if len(seen) != 2 {
+		t.Fatalf("expected random selection to hit both proxies over 50 draws, saw %v", seen)
 	}
 }
 
@@ -142,12 +151,12 @@ func TestResolveSkipsDisabledProxies(t *testing.T) {
 	}
 	Sync(cfg)
 
-	// The counter advances for every call; disabled entries are skipped in the
-	// forward scan, so the observed sequence is 1,3,3,1,3,3.
-	want := []string{"http://1.1.1.1:8080", "http://3.3.3.3:8080", "http://3.3.3.3:8080", "http://1.1.1.1:8080", "http://3.3.3.3:8080", "http://3.3.3.3:8080"}
-	for i, expected := range want {
-		if got := Resolve("pool"); got != expected {
-			t.Fatalf("Resolve() call %d = %q, want %q", i+1, got, expected)
+	// Only the two enabled entries may ever be selected.
+	valid := map[string]bool{"http://1.1.1.1:8080": true, "http://3.3.3.3:8080": true}
+	for i := 0; i < 30; i++ {
+		got := Resolve("pool")
+		if !valid[got] {
+			t.Fatalf("Resolve() call %d = %q, want an enabled proxy only", i+1, got)
 		}
 	}
 }

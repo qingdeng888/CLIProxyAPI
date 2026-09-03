@@ -2,12 +2,13 @@
 // pool. Any "proxy-url" style setting value is a mode selector:
 //
 //   - "" / "direct" / "none" and plain proxy URLs pass through unchanged
-//   - "pool", "pool:*", "rotate" pick the next enabled proxy round-robin
+//   - "pool", "pool:*", "rotate" pick a random enabled proxy
 //   - "bind:<id>" / "bind:<url>" pin the selector to one pool proxy
-//   - legacy "pool:<name>" values are treated as "pool" (rotate)
+//   - legacy "pool:<name>" values are treated as "pool" (random rotate)
 package proxypool
 
 import (
+	"math/rand/v2"
 	"sort"
 	"strings"
 	"sync"
@@ -26,35 +27,27 @@ type poolProxy struct {
 	enabled bool
 }
 
-// poolState holds the flat proxy list with an atomic round-robin cursor.
+// poolState holds the flat proxy list plus the subset of enabled proxies so
+// random selection never has to skip disabled entries.
 type poolState struct {
 	proxies []poolProxy
-	counter atomic.Uint64
+	enabled []poolProxy
 }
 
-// next returns the next enabled proxy URL using a round-robin counter.
-// Disabled proxies are skipped by scanning forward from the counter with a
-// bounded loop over the pool size; an empty pool returns "".
+// next returns a uniformly random enabled proxy URL; an empty enabled set
+// returns "".
 func (p *poolState) next() string {
-	if len(p.proxies) == 0 {
+	if len(p.enabled) == 0 {
+		log.Debug("proxy pool has no enabled proxies")
 		return ""
 	}
-	count := uint64(len(p.proxies))
-	start := (p.counter.Add(1) - 1) % count
-	for offset := uint64(0); offset < count; offset++ {
-		candidate := p.proxies[(start+offset)%count]
-		if !candidate.enabled {
-			continue
-		}
-		log.WithFields(log.Fields{
-			"proxy_name": candidate.name,
-			"proxy_id":   candidate.id,
-			"proxy_via":  proxyutil.Redact(candidate.url),
-		}).Debug("proxy pool rotate selected")
-		return candidate.url
-	}
-	log.Debug("proxy pool has no enabled proxies")
-	return ""
+	candidate := p.enabled[rand.IntN(len(p.enabled))]
+	log.WithFields(log.Fields{
+		"proxy_name": candidate.name,
+		"proxy_id":   candidate.id,
+		"proxy_via":  proxyutil.Redact(candidate.url),
+	}).Debug("proxy pool rotate selected")
+	return candidate.url
 }
 
 // pick returns the first enabled proxy matching the given predicate.
@@ -95,12 +88,16 @@ func Sync(cfg *config.Config) {
 		next.proxies = make([]poolProxy, 0, len(cfg.ProxyPool))
 		for _, entry := range cfg.ProxyPool {
 			if trimmed := strings.TrimSpace(entry.URL); trimmed != "" {
-				next.proxies = append(next.proxies, poolProxy{
+				proxy := poolProxy{
 					id:      entry.ID,
 					name:    strings.TrimSpace(entry.Name),
 					url:     trimmed,
 					enabled: entry.IsEnabled(),
-				})
+				}
+				next.proxies = append(next.proxies, proxy)
+				if proxy.enabled {
+					next.enabled = append(next.enabled, proxy)
+				}
 			}
 		}
 	}
@@ -125,7 +122,7 @@ func isSelector(lower string) bool {
 		strings.HasPrefix(lower, "pool:") || strings.HasPrefix(lower, "bind:")
 }
 
-// resolveRotate returns the next enabled proxy via round-robin.
+// resolveRotate returns a uniformly random enabled pool proxy.
 func resolveRotate() string {
 	regMu.RLock()
 	current := state.Load()
@@ -171,8 +168,8 @@ func resolveBind(value string) string {
 //   - "" / "direct" / "none" and plain proxy URLs are returned trimmed and
 //     unchanged (callers' proxyutil.Parse treats them as inherit / direct /
 //     proxy modes respectively)
-//   - "pool", "pool:*", "rotate" and the legacy "pool:<name>" form pick the
-//     next enabled pool proxy round-robin; an empty pool returns "" so the
+//   - "pool", "pool:*", "rotate" and the legacy "pool:<name>" form pick a
+//     uniformly random enabled pool proxy; an empty pool returns "" so the
 //     caller falls back to inherit semantics
 //   - "bind:<id>" (or "bind:<url>") returns that proxy's URL when it exists and
 //     is enabled; otherwise "" plus a warning

@@ -133,12 +133,11 @@ redis-usage-queue-retention-seconds: 60
 
 # Proxy URL. Supports socks5/http/https protocols. Example: socks5://user:pass@192.168.1.1:1080/
 # Per-entry proxy-url also supports "direct" or "none" to bypass both the global proxy-url and environment proxies explicitly.
-# Per-entry proxy-url also accepts "pool" to rotate through the flat proxy-pool
-# (round-robin) or "bind:<id>"/"bind:<url>" to pin to one specific pool entry.
+# Per-entry proxy-url also accepts "pool" to pick a random entry from the flat
+# proxy-pool or "bind:<id>"/"bind:<url>" to pin to one specific pool entry.
 proxy-url: ""
-
 # Flat proxy pool for outbound proxy selection. Any per-entry proxy-url may
-# reference it with "pool" (round-robin) or bind to a specific entry with
+# reference it with "pool" (uniform random pick) or bind to a specific entry with
 # "bind:<id>" / "bind:<url>". Each entry is an independent entity with a stable
 # ID derived from its URL (first 12 hex chars of sha256).
 # Per-entry proxy formats: http://user:pass@ip:port, http://ip:port, and the
