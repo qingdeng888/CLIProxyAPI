@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/config"
+	"github.com/router-for-me/CLIProxyAPI/v7/internal/proxypool"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/auth"
 	sdkconfig "github.com/router-for-me/CLIProxyAPI/v7/sdk/config"
 )
@@ -257,6 +258,58 @@ func TestAPICallTransportAPIKeyAuthFallsBackToConfigProxyURL(t *testing.T) {
 			}
 			if proxyURL == nil || proxyURL.String() != tc.wantProxy {
 				t.Fatalf("proxy URL = %v, want %s", proxyURL, tc.wantProxy)
+			}
+		})
+	}
+}
+
+func TestAPICallTransportResolvesProxyPoolSelectors(t *testing.T) {
+	proxypool.Sync(&config.Config{
+		ProxyPool: []config.ProxyEntry{{
+			ID:   "abc123def456",
+			Name: "proxy-1",
+			URL:  "http://pool-proxy.example.com:3128",
+		}},
+	})
+	t.Cleanup(func() { proxypool.Sync(&config.Config{}) })
+
+	h := &Handler{cfg: &config.Config{}}
+	req, errRequest := http.NewRequest(http.MethodGet, "https://example.com", nil)
+	if errRequest != nil {
+		t.Fatalf("http.NewRequest returned error: %v", errRequest)
+	}
+
+	cases := []struct {
+		name            string
+		auth            *coreauth.Auth
+		requestProxyURL string
+	}{
+		{
+			name:            "credential bind selector",
+			auth:            &coreauth.Auth{ProxyURL: "bind:abc123def456"},
+			requestProxyURL: "",
+		},
+		{
+			name:            "request bind selector",
+			auth:            nil,
+			requestProxyURL: "bind:abc123def456",
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			transport := h.apiCallTransport(tc.auth, tc.requestProxyURL)
+			httpTransport, ok := transport.(*http.Transport)
+			if !ok {
+				t.Fatalf("transport type = %T, want *http.Transport", transport)
+			}
+			proxyURL, errProxy := httpTransport.Proxy(req)
+			if errProxy != nil {
+				t.Fatalf("httpTransport.Proxy returned error: %v", errProxy)
+			}
+			if proxyURL == nil || proxyURL.String() != "http://pool-proxy.example.com:3128" {
+				t.Fatalf("proxy URL = %v, want http://pool-proxy.example.com:3128", proxyURL)
 			}
 		})
 	}

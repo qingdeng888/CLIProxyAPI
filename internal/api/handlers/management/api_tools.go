@@ -485,7 +485,9 @@ func (h *Handler) authByIndex(authIndex string) *coreauth.Auth {
 }
 
 func (h *Handler) apiCallTransport(auth *coreauth.Auth, requestProxyURL string) http.RoundTripper {
-	if proxyStr := strings.TrimSpace(requestProxyURL); proxyStr != "" {
+	// Resolve pool selectors ("pool", "bind:<id>") into concrete proxy URLs so
+	// management API calls honor proxy-pool bindings the same way inference does.
+	if proxyStr := proxypool.Resolve(requestProxyURL); proxyStr != "" {
 		if transport := buildProxyTransport(proxyStr); transport != nil {
 			return transport
 		}
@@ -510,8 +512,10 @@ func (h *Handler) apiCallTransport(auth *coreauth.Auth, requestProxyURL string) 
 	}
 
 	for _, proxyStr := range proxyCandidates {
-		if transport := buildProxyTransport(proxyStr); transport != nil {
-			return transport
+		if resolvedProxy := proxypool.Resolve(proxyStr); resolvedProxy != "" {
+			if transport := buildProxyTransport(resolvedProxy); transport != nil {
+				return transport
+			}
 		}
 	}
 
