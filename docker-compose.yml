@@ -1,6 +1,8 @@
 services:
   cli-proxy-api:
-    image: ${CLI_PROXY_IMAGE:-eceasy/cli-proxy-api:latest}
+    # 默认使用本仓库 CI 构建的镜像（内置定制管理面板）；
+    # 上游原版镜像为 eceasy/cli-proxy-api:latest（不含二开面板），可用 CLI_PROXY_IMAGE 覆盖
+    image: ${CLI_PROXY_IMAGE:-ghcr.io/qingdeng888/cli-proxy-api:latest}
     pull_policy: always
     build:
       context: .

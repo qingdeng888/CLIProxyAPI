@@ -46,8 +46,8 @@ docker compose up -d
 
 ## 仅用官方后端镜像（不含二开面板）
 
-官方镜像 `eceasy/cli-proxy-api:latest` 不含代理池二开 UI（后端会下载上游官方面板，
-功能子集）：
+若要用上游原版镜像 `eceasy/cli-proxy-api:latest`（不含代理池二开 UI，
+且依赖从 GitHub Releases 下载官方面板，国内服务器常失败导致 /management.html 404）：
 
 ```bash
 CLI_PROXY_IMAGE=eceasy/cli-proxy-api:latest docker compose up -d
@@ -74,7 +74,7 @@ CLI_PROXY_IMAGE=cli-proxy-api:local docker compose up -d --no-build
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `PORT_MAP` | `13001` | 对外宿主机端口（浏览器访问） |
-| `CLI_PROXY_IMAGE` | `eceasy/cli-proxy-api:latest` | 后端镜像名 |
+| `CLI_PROXY_IMAGE` | `ghcr.io/qingdeng888/cli-proxy-api:latest` | 后端镜像名（本仓库 CI 产物，内置面板） |
 | `WEB_IMAGE` | `ghcr.io/qingdeng888/cli-proxy-web:latest` | 构建期面板来源镜像 |
 | `CLI_PROXY_CONFIG_PATH` | `./config.yaml` | 后端配置挂载路径 |
 | `CLI_PROXY_AUTH_PATH` | `./auths` | 认证目录挂载 |
